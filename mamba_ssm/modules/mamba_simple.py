@@ -165,16 +165,16 @@ class Mamba(nn.Module):
                 # If we just take x[:, :, -self.d_conv :], it will error if seqlen < self.d_conv
                 # Instead F.pad will pad with zeros if seqlen < self.d_conv, and truncate otherwise.
                 conv_state.copy_(F.pad(x, (self.d_conv - x.shape[-1], 0)))  # Update state (B D W)
-            if causal_conv1d_fn is None:
-                x = self.act(self.conv1d(x)[..., :seqlen])
-            else:
-                assert self.activation in ["silu", "swish"]
-                x = causal_conv1d_fn(
-                    x=x,
-                    weight=rearrange(self.conv1d.weight, "d 1 w -> d w"),
-                    bias=self.conv1d.bias,
-                    activation=self.activation,
-                )
+            #if causal_conv1d_fn is None:
+            x = self.act(self.conv1d(x)[..., :seqlen])
+            #else:
+            #    assert self.activation in ["silu", "swish"]
+            #    x = causal_conv1d_fn(
+            #        x=x,
+            #        weight=rearrange(self.conv1d.weight, "d 1 w -> d w"),
+            #        bias=self.conv1d.bias,
+            #        activation=self.activation,
+            #    )
 
             # We're careful here about the layout, to avoid extra transposes.
             # We want dt to have d as the slowest moving dimension
@@ -212,21 +212,21 @@ class Mamba(nn.Module):
         x, z = xz.chunk(2, dim=-1)  # (B D)
 
         # Conv step
-        if causal_conv1d_update is None:
-            conv_state.copy_(torch.roll(conv_state, shifts=-1, dims=-1))  # Update state (B D W)
-            conv_state[:, :, -1] = x
-            x = torch.sum(conv_state * rearrange(self.conv1d.weight, "d 1 w -> d w"), dim=-1)  # (B D)
-            if self.conv1d.bias is not None:
-                x = x + self.conv1d.bias
-            x = self.act(x).to(dtype=dtype)
-        else:
-            x = causal_conv1d_update(
-                x,
-                conv_state,
-                rearrange(self.conv1d.weight, "d 1 w -> d w"),
-                self.conv1d.bias,
-                self.activation,
-            )
+        #if causal_conv1d_update is None:
+        conv_state.copy_(torch.roll(conv_state, shifts=-1, dims=-1))  # Update state (B D W)
+        conv_state[:, :, -1] = x
+        x = torch.sum(conv_state * rearrange(self.conv1d.weight, "d 1 w -> d w"), dim=-1)  # (B D)
+        if self.conv1d.bias is not None:
+            x = x + self.conv1d.bias
+        x = self.act(x).to(dtype=dtype)
+        #else:
+        #    x = causal_conv1d_update(
+        #        x,
+        #        conv_state,
+        #        rearrange(self.conv1d.weight, "d 1 w -> d w"),
+        #        self.conv1d.bias,
+        #        self.activation,
+        #    )
 
         x_db = self.x_proj(x)  # (B dt_rank+2*d_state)
         dt, B, C = torch.split(x_db, [self.dt_rank, self.d_state, self.d_state], dim=-1)
